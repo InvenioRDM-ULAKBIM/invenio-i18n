@@ -119,29 +119,27 @@ def distribute_js_translations(input_directory: Path, entrypoint_group: str):
     type=click.Path(
         exists=True, file_okay=False, dir_okay=True, writable=True, path_type=Path
     ),
-    help="Directory to which collected translations in JSON format should eb written.",
+    help="Directory to which collected translations in JSON format should be written.",
 )
 def download_transifex(token, languages, output_directory):
     """Compile message catalog."""
-    js_resources = current_app.config["I18N_TRANSIFEX_JS_RESOURCES"]
+    js_resources = current_app.config["I18N_TRANSIFEX_JS_RESOURCES_MAP"]
 
     downloads_path = output_directory / "download_transifex"
     downloads_path.mkdir(parents=True, exist_ok=True)
 
     with open(downloads_path / "collected_config", "w") as f:
         # TODO Transifex downloads to path in config, change config if a different file location for *.po files is needed
-        config_template = Environment(loader=BaseLoader()).from_string(
-            """
-            [main]
-            host = https://www.transifex.com
+        config_template = Environment(loader=BaseLoader()).from_string("""
+[main]
+host = https://www.transifex.com
 
-            [o:inveniosoftware:p:invenio:r:{{- resource }}]
-            file_filter = {{- downloads_path }}/{{- module }}/<lang>/messages.po
-            source_file = {{- module }}/assets/semantic-ui/translations/{{- module }}/translations.pot
-            source_lang = en
-            type = PO
-        """
-        )
+[o:inveniosoftware:p:invenio:r:{{- resource }}]
+file_filter = {{- downloads_path }}/{{- module }}/<lang>/messages.po
+source_file = {{- module }}/assets/semantic-ui/translations/{{- module }}/translations.pot
+source_lang = en
+type = PO
+        """)
 
         for resource, module in js_resources.items():
             f.write(
@@ -154,7 +152,7 @@ def download_transifex(token, languages, output_directory):
     transifex_pull_cmd = [
         "tx",
         f"--token={token}",
-        "--config=collected_config",
+        f"--config={downloads_path}/collected_config",
         "pull",
         f"--languages={languages}",
         "--force",
@@ -168,10 +166,7 @@ def download_transifex(token, languages, output_directory):
         collected_translations[language] = {}
 
         for resource, module in js_resources.items():
-            if module == "invenio_app_rdm":
-                po_path = f"./{module}/theme/assets/semantic-ui/translations/{module}/messages/{language}/messages.po"
-            else:
-                po_path = f"./{module}/assets/semantic-ui/translations/{module}/messages/{language}/messages.po"
+            po_path = f"{downloads_path}/{module}/{language}/messages.po"
 
             pofile = polib.pofile(po_path)
             collected_translations[language][module] = {}
@@ -187,7 +182,7 @@ def download_transifex(token, languages, output_directory):
                         ] = entry.msgstr_plural[1]
 
         with open(
-                f"{output_directory}/{language}/collected_translations_{language}.json",
+                f"{output_directory}/{language}.json",
                 "w",
                 encoding="utf-8",
         ) as f:
